@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     from .base import SparseVector, SparseArray
     from numpy.typing import NDArray
     from typing import Optional, Sequence
-    import biosteam as bst
+    from ... import biosteam as bst
 # from .constants import g
 
 __all__ = ('Stream', )

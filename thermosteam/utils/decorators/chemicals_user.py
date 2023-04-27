@@ -7,7 +7,7 @@
 # for license details.
 """
 """
-import thermosteam as tmo
+from .... import thermosteam as tmo
 
 __all__ = ('chemicals_user',)
 

@@ -7,7 +7,7 @@
 # for license details.
 """
 """
-import thermosteam as tmo
+from .... import thermosteam as tmo
 from typing import Optional
 
 __all__ = ('units_of_measure',)

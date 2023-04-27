@@ -4,7 +4,7 @@ Created on Sat Dec 17 17:15:23 2022
 
 @author: yrc2
 """
-import thermosteam as tmo
+from .... import thermosteam as tmo
 from functools import cache
 
 __all__ = ('chemical_cache',)

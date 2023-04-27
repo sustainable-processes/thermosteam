@@ -5,7 +5,7 @@ from chemicals.lennard_jones import Stockmayer, molecular_diameter
 from thermo.unifac import UNIFAC_RQ, Van_der_Waals_volume, Van_der_Waals_area
 from chemicals.utils import Parachor
 from collections.abc import Iterable
-import thermosteam as tmo
+from .. import thermosteam as tmo
 
 class ChemicalData:
     """
