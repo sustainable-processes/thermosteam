@@ -10,9 +10,9 @@
 from __future__ import annotations
 import pandas as pd
 import numpy as np
-import thermosteam as tmo
+from .. import thermosteam as tmo
 import flexsolve as flx
-from thermosteam import functional as fn, Thermo
+from . import functional as fn, Thermo
 from . import indexer
 from . import equilibrium as eq
 from . import units_of_measure as thermo_units

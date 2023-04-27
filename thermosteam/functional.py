@@ -10,7 +10,7 @@
 from chemicals import *
 from chemicals.utils import *
 from fluids.core import Pr, alpha
-from thermosteam.base import functor
+from .base import functor
 from numba import njit
 import numpy as np
 

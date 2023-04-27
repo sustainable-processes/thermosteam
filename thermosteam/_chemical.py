@@ -7,7 +7,7 @@
 # for license details.
 """
 """
-import thermosteam as tmo
+from .. import thermosteam as tmo
 from warnings import warn
 from flexsolve import IQ_interpolation, aitken_secant
 from chemicals.identifiers import pubchem_db
@@ -25,16 +25,16 @@ from chemicals.acentric import (omega as acentric_factor,
 from chemicals.triple import (Tt as triple_point_temperature,
                               Pt as triple_point_pressure)
 from chemicals.combustion import combustion_data, combustion_stoichiometry
-from chemicals.reaction import (
+from .chemicals.reaction import (
     Hf as heat_of_formation,
-    S0 as absolute_entropy_of_formation
+    S0 as absolute_entropy_of_formation,
 )
+from .chemicals.elements import get_atoms
 from chemicals.elements import (
     similarity_variable as compute_similarity_variable, 
     molecular_weight as compute_molecular_weight,
     charge_from_formula,
     atoms_to_Hill,
-    get_atoms,
 )
 from chemicals.dipole import dipole_moment
 from .free_energy import (
@@ -112,7 +112,6 @@ class CompressibilityFactor:
     
     def __repr__(self):
         return f"{type(self).__name__}(self.V)"
-
 try:
     from CoolProp.CoolProp import PropsSI
 except:

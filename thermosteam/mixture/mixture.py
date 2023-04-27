@@ -10,7 +10,7 @@
 import flexsolve as flx
 import numpy as np
 from math import exp
-from thermosteam import functional as fn
+from .. import functional as fn
 from .. import units_of_measure as thermo_units
 from ..base import PhaseHandle, MockPhaseTHandle, MockPhaseTPHandle, sparse
 from .ideal_mixture_model import (

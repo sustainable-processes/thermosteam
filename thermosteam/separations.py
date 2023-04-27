@@ -11,7 +11,7 @@ This module contains functions for modeling separations in unit operations.
 """
 from warnings import warn
 from numba import njit
-import thermosteam as tmo
+from .. import thermosteam as tmo
 import flexsolve as flx
 import numpy as np
 import pandas as pd

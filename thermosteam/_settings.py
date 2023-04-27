@@ -8,7 +8,7 @@
 """
 """
 from __future__ import annotations
-import thermosteam as tmo
+from .. import thermosteam as tmo
 from typing import Optional, Iterable
 from .units_of_measure import AbsoluteUnitsOfMeasure
 from typing import TYPE_CHECKING

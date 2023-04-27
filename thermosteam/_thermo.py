@@ -8,7 +8,7 @@
 """
 """
 import numpy as np
-import thermosteam as tmo
+from .. import thermosteam as tmo
 from . import equilibrium as eq
 from ._chemical import Chemical
 from ._chemicals import Chemicals

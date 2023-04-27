@@ -12,7 +12,7 @@ from .exceptions import UndefinedChemicalAlias
 from ._chemical import Chemical
 from .indexer import ChemicalIndexer, SplitIndexer
 from collections.abc import Sequence
-import thermosteam as tmo
+from .. import thermosteam as tmo
 import numpy as np
 
 __all__ = ('Chemicals', 'CompiledChemicals')

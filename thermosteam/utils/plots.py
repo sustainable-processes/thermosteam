@@ -51,7 +51,7 @@ def set_figure_size(width=None, aspect_ratio=None, units=None):
         width = 6.6142 / 2
     else:
         if units is not None:
-            from thermosteam.units_of_measure import convert
+            from ..units_of_measure import convert
             width = convert(width, units, 'inch')
     import matplotlib
     params = matplotlib.rcParams

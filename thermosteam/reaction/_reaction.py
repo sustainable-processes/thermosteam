@@ -8,7 +8,7 @@
 """
 """
 import thermosteam as tmo
-from thermosteam import functional as fn
+from .. import functional as fn
 import flexsolve as flx
 from chemicals import elements
 from warnings import warn

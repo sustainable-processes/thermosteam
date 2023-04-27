@@ -7,7 +7,7 @@
 # for license details.
 """
 """
-import thermosteam as tmo
+from .. import thermosteam as tmo
 from .units_of_measure import AbsoluteUnitsOfMeasure
 from . import utils
 from .exceptions import UndefinedChemicalAlias, UndefinedPhase
