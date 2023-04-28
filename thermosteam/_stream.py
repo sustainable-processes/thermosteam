@@ -10,7 +10,7 @@
 from __future__ import annotations
 import pandas as pd
 import numpy as np
-from .. import thermosteam as tmo
+import thermosteam as tmo
 import flexsolve as flx
 from . import functional as fn, Thermo
 from . import indexer
@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     from .base import SparseVector, SparseArray
     from numpy.typing import NDArray
     from typing import Optional, Sequence
-    from ... import biosteam as bst
+    import biosteam as bst
 # from .constants import g
 
 __all__ = ('Stream', )

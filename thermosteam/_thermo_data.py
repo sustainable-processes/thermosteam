@@ -8,7 +8,7 @@
 """
 """
 from collections.abc import Iterable
-from .. import thermosteam as tmo
+import thermosteam as tmo
 
 __all__ = ('ThermoData',)
 

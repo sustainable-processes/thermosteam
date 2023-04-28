@@ -7,7 +7,7 @@
 # for license details.
 """
 """
-from .. import thermosteam as tmo
+import thermosteam as tmo
 from warnings import warn
 from flexsolve import IQ_interpolation, aitken_secant
 from chemicals.identifiers import pubchem_db

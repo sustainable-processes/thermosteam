@@ -31,7 +31,7 @@ setup(
                       'pyglet'],
     extras_require={
         'dev': [
-            'biorefineries>=2.23.16',
+            # 'biorefineries>=2.23.16',
             'sympy',
             'sphinx',
             'sphinx_rtd_theme',
