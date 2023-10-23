@@ -35,6 +35,7 @@ def get_phase_fraction(stream, phases):
             phase_fraction += imol[phase].sum() 
     return phase_fraction / F_mol
 
+@utils.registered_franchise(Stream)
 class MultiStream(Stream):
     """
     Create a MultiStream object that defines material flow rates for multiple
@@ -84,9 +85,9 @@ class MultiStream(Stream):
     ...                      l=[('Water', 20), ('Ethanol', 10)], units='kg/hr')
     >>> s1.show(flow='kg/hr') # Use the show method to select units of display
     MultiStream: s1
-     phases: ('g', 'l'), T: 298.15 K, P: 101325 Pa
-     flow (kg/hr): (l) Water    20
-                       Ethanol  10
+    phases: ('g', 'l'), T: 298.15 K, P: 101325 Pa
+    flow (kg/hr): (l) Water    20
+                      Ethanol  10
     
     The temperature and pressure are stored as attributes:
     
@@ -112,7 +113,7 @@ class MultiStream(Stream):
          Ethanol   0.2171
     >>> # Index a single chemical in the liquid phase
     >>> s1.imol['l', 'Water']
-    1.1101687012358397
+    1.1101
     >>> # Index multiple chemicals in the liquid phase
     >>> s1.imol['l', ('Ethanol', 'Water')]
     array([0.217, 1.11 ])
@@ -178,14 +179,14 @@ class MultiStream(Stream):
     
     >>> s1['l'].show()
     Stream: 
-     phase: 'l', T: 365 K, P: 101325 Pa
-     flow (kmol/hr): Water    0.616
-                     Ethanol  0.0235
+    phase: 'l', T: 365 K, P: 101325 Pa
+    flow (kmol/hr): Water    0.617
+                    Ethanol  0.0238
     >>> s1['g'].show()
     Stream: 
-     phase: 'g', T: 365 K, P: 101325 Pa
-     flow (kmol/hr): Water    0.494
-                     Ethanol  0.194
+    phase: 'g', T: 365 K, P: 101325 Pa
+    flow (kmol/hr): Water    0.493
+                    Ethanol  0.193
     
     Note that the phase cannot be changed:
     
@@ -249,8 +250,30 @@ class MultiStream(Stream):
         self._sink = self._source = None
         self.reset_cache()
         self._register(ID)
-        self._user_equilibrium = None
         if vlle: self.vlle(T, P)
+        
+    @classmethod
+    def from_streams(cls, streams):
+        if not streams: raise ValueError('at least one stream must be passed')
+        self = cls.__new__(cls)
+        self._streams = streams_by_phase = {i.phase: i for i in streams}
+        phases = phase_tuple(streams_by_phase)
+        N_streams = len(streams)
+        if len(phases) != N_streams: raise ValueError('each stream must have a different phase')
+        base, *others = streams
+        self.characterization_factors = {}
+        self._thermal_condition = base._thermal_condition
+        for i in others: i._thermal_condition = base._thermal_condition
+        self._load_thermo(base.thermo)
+        self.price = 0
+        self._imol = MolarFlowIndexer.from_data(
+            [streams_by_phase[i]._imol.data for i in phases], phases, 
+            chemicals=base.chemicals
+        )
+        self._sink = self._source = None
+        self.reset_cache()
+        self._register(None)
+        return self
         
     def reset_flow(self, total_flow=None, units=None, phases=None, **phase_flows):
         """
@@ -264,9 +287,9 @@ class MultiStream(Stream):
         >>> s1.reset_flow(g=[('Ethanol', 1)], phases='lgs', units='kg/hr', total_flow=2)
         >>> s1.show('cwt')
         MultiStream: s1
-         phases: ('g', 'l', 's'), T: 298.15 K, P: 101325 Pa
-         composition (%): (g) Ethanol  100
-                              -------  2 kg/hr
+        phases: ('g', 'l', 's'), T: 298.15 K, P: 101325 Pa
+        composition (%): (g) Ethanol  100
+                             -------  2 kg/hr
         
         """
         imol = self._imol
@@ -363,7 +386,6 @@ class MultiStream(Stream):
             stream._property_cache = {}
             stream.characterization_factors = {}
             stream._property_cache_key = None, None
-            stream._user_equilibrium = None
             streams[phase] = stream
         return stream
     
@@ -396,6 +418,9 @@ class MultiStream(Stream):
         >>> s1 = tmo.MultiStream('s1', l=[('Water', 20), ('Ethanol', 10)], units='kg/hr')
         >>> s1.get_flow('kg/hr', ('l', 'Water'))
         20.0
+        
+        >>> s1.get_flow('kg/hr')
+        sparse([20., 10.])
 
         """
         name, factor = self._get_flow_name_and_factor(units)
@@ -440,8 +465,9 @@ class MultiStream(Stream):
         return self._imol._phases
     @phases.setter
     def phases(self, phases):
+        phases = set(phases)
         if len(phases) == 1:
-            self.phase = phases[0]
+            self.phase, = phases
         phases = phase_tuple(phases)
         if phases != self.phases:
             self._imol = self._imol.to_material_indexer(phases)
@@ -539,15 +565,15 @@ class MultiStream(Stream):
         >>> s.split_to(s1, s2, split)
         >>> s1.show(flow='kg/hr')
         MultiStream: s1
-         phases: ('g', 'l'), T: 298.15 K, P: 101325 Pa
-         flow (kg/hr): (l) Water    10
-                           Ethanol  1
+        phases: ('g', 'l'), T: 298.15 K, P: 101325 Pa
+        flow (kg/hr): (l) Water    10
+                          Ethanol  1
         
         >>> s2.show(flow='kg/hr')
         MultiStream: s2
-         phases: ('g', 'l'), T: 298.15 K, P: 101325 Pa
-         flow (kg/hr): (l) Water    10
-                           Ethanol  9
+        phases: ('g', 'l'), T: 298.15 K, P: 101325 Pa
+        flow (kg/hr): (l) Water    10
+                          Ethanol  9
         
         
         """
@@ -581,8 +607,8 @@ class MultiStream(Stream):
         >>> s1.copy_like(s2)
         >>> s1.show(flow='kg/hr')
         MultiStream: s1
-         phases: ('g', 'l'), T: 298.15 K, P: 101325 Pa
-         flow (kg/hr): (l) Water  2
+        phases: ('g', 'l'), T: 298.15 K, P: 101325 Pa
+        flow (kg/hr): (l) Water  2
          
         Copy data from another stream with a different property package:
         
@@ -594,8 +620,8 @@ class MultiStream(Stream):
         >>> s1.copy_like(s2)
         >>> s1.show(flow='kg/hr')
         MultiStream: s1
-         phases: ('g', 'l'), T: 298.15 K, P: 101325 Pa
-         flow (kg/hr): (l) Water  2
+        phases: ('g', 'l'), T: 298.15 K, P: 101325 Pa
+        flow (kg/hr): (l) Water  2
 
         """
         self._imol.copy_like(other._imol)
@@ -639,9 +665,9 @@ class MultiStream(Stream):
         >>> s2.copy_flow(s1)
         >>> s2.show(flow='kg/hr')
         MultiStream: s2
-         phases: ('g', 'l'), T: 298.15 K, P: 101325 Pa
-         flow (kg/hr): (l) Water    20
-                           Ethanol  10
+        phases: ('g', 'l'), T: 298.15 K, P: 101325 Pa
+        flow (kg/hr): (l) Water    20
+                          Ethanol  10
         
         Reset and copy just water flow:
         
@@ -649,8 +675,8 @@ class MultiStream(Stream):
         >>> s2.copy_flow(s1, IDs='Water')
         >>> s2.show(flow='kg/hr')
         MultiStream: s2
-         phases: ('g', 'l'), T: 298.15 K, P: 101325 Pa
-         flow (kg/hr): (l) Water  20
+        phases: ('g', 'l'), T: 298.15 K, P: 101325 Pa
+        flow (kg/hr): (l) Water  20
         
         Reset and copy all flows except water:
         
@@ -658,20 +684,20 @@ class MultiStream(Stream):
         >>> s2.copy_flow(s1, IDs='Water', exclude=True)
         >>> s2.show(flow='kg/hr')
         MultiStream: s2
-         phases: ('g', 'l'), T: 298.15 K, P: 101325 Pa
-         flow (kg/hr): (l) Ethanol  10
+        phases: ('g', 'l'), T: 298.15 K, P: 101325 Pa
+        flow (kg/hr): (l) Ethanol  10
         
         Cut and paste flows:
         
         >>> s2.copy_flow(s1, remove=True)
         >>> s2.show(flow='kg/hr')
         MultiStream: s2
-         phases: ('g', 'l'), T: 298.15 K, P: 101325 Pa
-         flow (kg/hr): (l) Water    20
-                           Ethanol  10
+        phases: ('g', 'l'), T: 298.15 K, P: 101325 Pa
+        flow (kg/hr): (l) Water    20
+                          Ethanol  10
         >>> s1.show()
         MultiStream: s1
-         phases: ('g', 'l'), T: 298.15 K, P: 101325 Pa
+        phases: ('g', 'l'), T: 298.15 K, P: 101325 Pa
          flow: 0
          
         The other stream can also be a single phase stream (doesn't have to be a MultiStream object):
@@ -688,9 +714,9 @@ class MultiStream(Stream):
         >>> s2.copy_flow(s1)
         >>> s2.show(flow='kg/hr')
         MultiStream: s2
-         phases: ('g', 'l'), T: 298.15 K, P: 101325 Pa
-         flow (kg/hr): (l) Water    20
-                           Ethanol  10
+        phases: ('g', 'l'), T: 298.15 K, P: 101325 Pa
+        flow (kg/hr): (l) Water    20
+                          Ethanol  10
         
         Reset and copy just water flow:
         
@@ -698,8 +724,8 @@ class MultiStream(Stream):
         >>> s2.copy_flow(s1, IDs='Water')
         >>> s2.show(flow='kg/hr')
         MultiStream: s2
-         phases: ('g', 'l'), T: 298.15 K, P: 101325 Pa
-         flow (kg/hr): (l) Water  20
+        phases: ('g', 'l'), T: 298.15 K, P: 101325 Pa
+        flow (kg/hr): (l) Water  20
         
         Reset and copy all flows except water:
         
@@ -707,21 +733,21 @@ class MultiStream(Stream):
         >>> s2.copy_flow(s1, IDs='Water', exclude=True)
         >>> s2.show(flow='kg/hr')
         MultiStream: s2
-         phases: ('g', 'l'), T: 298.15 K, P: 101325 Pa
-         flow (kg/hr): (l) Ethanol  10
+        phases: ('g', 'l'), T: 298.15 K, P: 101325 Pa
+        flow (kg/hr): (l) Ethanol  10
         
         Cut and paste flows:
         
         >>> s2.copy_flow(s1, remove=True)
         >>> s2.show(flow='kg/hr')
         MultiStream: s2
-         phases: ('g', 'l'), T: 298.15 K, P: 101325 Pa
-         flow (kg/hr): (l) Water    20
-                           Ethanol  10
+        phases: ('g', 'l'), T: 298.15 K, P: 101325 Pa
+        flow (kg/hr): (l) Water    20
+                          Ethanol  10
         >>> s1.show()
         Stream: s1
-         phase: 'l', T: 298.15 K, P: 101325 Pa
-         flow: 0
+        phase: 'l', T: 298.15 K, P: 101325 Pa
+        flow: 0
         
         """
         if self.chemicals is not other.chemicals:
@@ -903,10 +929,10 @@ class MultiStream(Stream):
         >>> tmo.settings.set_thermo(['Water', 'Ethanol', 'Methanol'], cache=True) 
         >>> s1 = tmo.MultiStream('s1', l=[('Water', 20), ('Ethanol', 10), ('Methanol', 10)], units='m3/hr')
         >>> s1.get_concentration('l', ('Water', 'Ethanol'))
-        array([27.672,  4.265])
+        array([27.673,  4.261])
 
         >>> s1.get_concentration('l', ('Water', 'Ethanol'), 'g/L')
-        array([498.512, 196.479])
+        array([498.532, 196.291])
 
         """
         F_vol = self.F_vol
@@ -970,25 +996,33 @@ class MultiStream(Stream):
         else:
             raise RuntimeError('multiple phases present; cannot convert to single phase stream')
     
+    def reduce_phases(self):
+        """Remove empty phases."""
+        self.phase = self.phase
+    
     @property
     def phase(self) -> str:
         imol = self._imol
         return ''.join([phases[0] for phases in ('g', 'lL', 'sS') if not imol.phases_are_empty(phases)])
     @phase.setter
     def phase(self, phase):
-        if len(phase) > 1: 
+        N_phase = len(phase)
+        if N_phase > 1: 
             self.phases = phase
         else:
+            if N_phase == 0: phase = 'l' # Default phase for streams
             self._imol = self._imol.to_chemical_indexer(phase)
             self._streams.clear()
             self.__class__ = Stream
     
     ### Representation ###
     
-    def _info_str(self, T_units, P_units, flow_units, composition, N_max, all_IDs, indexer, factor):
+    def _info_str(self, units, notation, composition, N_max, all_IDs, indexer, factor):
         """Return string with all specifications."""
         basic_info = self._basic_info()
-        basic_info += Stream._info_phaseTP(self, self.phases, T_units, P_units)
+        basic_info += Stream._info_phaseTP(self, self.phases, units, notation)
+        flow_units = units['flow']
+        flow_notation = notation['flow']
         N_all_IDs = len(all_IDs)
         if N_all_IDs == 0:
             return basic_info + ' flow: 0' 
@@ -998,9 +1032,9 @@ class MultiStream(Stream):
         maxlen = max(all_lengths) + 2
         
         if composition:
-            first_line = " composition (%):"
+            first_line = "composition (%):"
         else:
-            first_line = f' flow ({flow_units}):'
+            first_line = f'flow ({flow_units}):'
         first_line_spaces = len(first_line)*" "
 
         # Set up chemical data for all phases
@@ -1028,13 +1062,13 @@ class MultiStream(Stream):
             for i in range(N):
                 spaces = ' ' * (maxlen - lengths[i])
                 if i: flow_rates += new_line    
-                flow_rates += f'{IDs[i]}' + spaces + f'{data[i]:.3g}'
+                flow_rates += f'{IDs[i]}' + spaces + f'{data[i]:{flow_notation}}'
             if too_many_chemicals:
                 spaces = ' ' * (maxlen - 3)
-                flow_rates += new_line + '...' + spaces + f'{data[N_max:].sum():.3g}'
+                flow_rates += new_line + '...' + spaces + f'{data[N_max:].sum():{flow_notation}}'
             if composition:
                 dashes = '-' * (maxlen - 2)
-                flow_rates += f"{new_line}{dashes}  {total_flow:.3g} {flow_units}"
+                flow_rates += f"{new_line}{dashes}  {total_flow:{flow_notation}} {flow_units}"
             # Put it together
             phases_flow_rates_info += beginning + flow_rates + '\n'
             

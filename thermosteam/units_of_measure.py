@@ -10,26 +10,48 @@
 __all__ = ('chemical_units_of_measure', 
            'stream_units_of_measure',
            'ureg', 'get_dimensionality',
-           'DisplayUnits', 'AbsoluteUnitsOfMeasure', 'convert',
-           'Quantity', 'format_units', 'format_plot_units',
+           'DisplayUnits', 
+           'DisplayNotation',
+           'AbsoluteUnitsOfMeasure', 
+           'convert',
+           'Quantity', 
+           'parse_units_notation',
+           'format_units', 
+           'format_plot_units',
            'reformat_units')
 
 from .exceptions import DimensionError
 
 # %% Import unit registry
 
-from pint import UnitRegistry
+import pint
 import os
 
 # Set pint Unit Registry
-ureg = UnitRegistry()
+appreg = pint.get_application_registry()
+ureg = appreg.get()
 ureg.default_format = '~P'
-ureg.load_definitions(os.path.dirname(os.path.realpath(__file__)) + '/units_of_measure.txt')
+ureg._on_redefinition = 'warn' # Avoid breaking packages dependent on thermosteam (or biosteam)
+if not getattr(pint, 'BioSTEAM_units_loaded', False): # Avoid reloading units of measure in pint if thermosteam module is reloaded
+    ureg.load_definitions(os.path.dirname(os.path.realpath(__file__)) + '/units_of_measure.txt')
+    
 convert = ureg.convert
 Quantity = ureg.Quantity
-del os, UnitRegistry
+del os
 
 # %% Functions
+
+def parse_units_notation(value):
+    if value is None:
+        units = None
+        notation = None
+    elif ':' in value:
+        units, notation = value.split(':')
+        if not units: units = None
+    else:
+        units = value
+        notation = None
+    return units, notation
 
 def format_degrees(units):
     r"""
@@ -65,9 +87,9 @@ def format_units_power(units, isnumerator=True, mathrm=True):
         units += '^{' + (power if isnumerator else '-' + power) + '}'
         if other: units += other[0]
     else:
-        units = format_degrees(units)
-        if mathrm: 
-            units = '\mathrm{' + units + '}'
+        if units != '%':
+            units = format_degrees(units)      
+            if mathrm: units = '\mathrm{' + units + '}'
         if not isnumerator:
             units = units + '^{-1}'
     return units
@@ -88,18 +110,15 @@ def format_units(units, ends='$', mathrm=True):
     units = str(units)
     all_numerators = []
     all_denominators = []
-    term_is_numerator = True
-    for unprocessed_denominators in units.split("/"):
-        term, *numerators = unprocessed_denominators.split("*")
-        if term_is_numerator:
-            all_numerators.append(term)
-        else:
-            all_denominators.append(term)
-        term_is_numerator = not term_is_numerator
-        all_numerators.extend(numerators)
-    all_numerators = [format_units_power(i, True, mathrm) for i in all_numerators]
-    all_denominators = [format_units_power(i, False, mathrm) for i in all_denominators]
-    return ends + ' \cdot '.join(all_numerators + all_denominators).replace('$', '\$') + ends
+    unprocessed_numerators, *unprocessed_denominators = units.split("/")
+    all_numerators = unprocessed_numerators.split("*")
+    for unprocessed_denominator in unprocessed_denominators:
+        denominator, *unprocessed_numerators = unprocessed_denominator.split("*")
+        all_numerators.extend(unprocessed_numerators)
+        all_denominators.append(denominator)
+    all_numerators = [format_units_power(i, True, mathrm) for i in all_numerators if i != '1']
+    all_denominators = [format_units_power(i, False, mathrm) for i in all_denominators if i != '1']
+    return ends + ' \cdot '.join(all_numerators + all_denominators).replace('$', '\$').replace('%', '\%') + ends
 
 def reformat_units(name):
     left, right = name.split('[')
@@ -188,6 +207,39 @@ class RelativeUnitsOfMeasure(UnitsOfMeasure):
 
 # %% Manage display units
 
+class DisplayNotation:
+    """
+    Create a DisplayNotation object where default units for representation are stored.
+    
+    Examples
+    --------
+    Its possible to change the default units of measure for the Stream show method:
+        
+    >>> import thermosteam as tmo
+    >>> tmo.settings.set_thermo(['Water'], cache=True)
+    >>> tmo.Stream.display_notation.flow = '.2g'
+    >>> stream = tmo.Stream('stream', Water=1.324, units='kg/hr')
+    >>> stream.show()
+    Stream: stream
+    phase: 'l', T: 298.15 K, P: 101325 Pa
+    flow (kmol/hr): Water  0.073
+    
+    >>> # Change back to kmol/hr
+    >>> tmo.Stream.display_notation.flow = '.3g'
+    
+    """
+    __slots__ = ('T', 'P', 'flow')
+    
+    def __init__(self, T, P, flow):
+        self.T = T
+        self.P = P
+        self.flow = flow
+
+    def __repr__(self):
+        sig = ', '.join([f"{i}={getattr(self, i)!r}'" for i in self.__slots__])
+        return f'{type(self).__name__}({sig})'
+
+
 class DisplayUnits:
     """
     Create a DisplayUnits object where default units for representation are stored.
@@ -202,8 +254,8 @@ class DisplayUnits:
     >>> stream = tmo.Stream('stream', Water=1, units='kg/hr')
     >>> stream.show()
     Stream: stream
-     phase: 'l', T: 298.15 K, P: 101325 Pa
-     flow (kg/hr): Water  1
+    phase: 'l', T: 298.15 K, P: 101325 Pa
+    flow (kg/hr): Water  1
     
     >>> # Change back to kmol/hr
     >>> tmo.Stream.display_units.flow = 'kmol/hr'
@@ -241,9 +293,9 @@ class DisplayUnits:
                 if name_dim != unit_dim:
                     raise DimensionError(f"dimensions for '{name}' must be in ({name_dim}), not ({unit_dim})")
         object.__setattr__(self, name, unit)
-            
+    
     def __repr__(self):
-        sig = ', '.join((f"{i}='{j}'" if isinstance(j, str) else f'{i}={j}') for i,j in self.__dict__.items() if i != 'dims')
+        sig = ', '.join([f"{i}={j!r}" for i,j in self.__dict__.items() if i != 'dims'])
         return f'{type(self).__name__}({sig})'
 
 
@@ -331,53 +383,54 @@ heat_utility_units_of_measure = {
     'duty': AbsoluteUnitsOfMeasure('kJ/hr'),
 }
 
-definitions = {'MW': 'Molecular weight',
-               'T': 'Temperature',
-               'Tr': 'Reduced temperature',
-               'Tm': 'Melting point temperature',
-               'Tb': 'Boiling point temperature',
-               'Tbr': 'Reduced boiling point temperature',
-               'Tt': 'Triple point temperature',
-               'Tc': 'Critical point temperature',
-               'P': 'Pressure',
-               'Pr': 'Reduced pressure',
-               'Pc': 'Critical point pressure',
-               'Psat': 'Saturated vapor pressure',
-               'Pt': 'Triple point pressure',
-               'V': 'Molar volume',
-               'Vc': 'Critical point volume',
-               'Cp': 'Specific heat capacity',
-               'Cn': 'Molar heat capacity',
-               'rho': 'Density',
-               'rhoc': 'Critical point density',
-               'nu': 'Kinematic viscosity',
-               'mu': 'hydraulic viscosity',
-               'sigma': 'Surface tension',
-               'kappa': 'Thermal conductivity',
-               'alpha': 'Thermal diffusivity',
-               'Hvap': 'Heat of vaporization',
-               'H': 'Enthalpy',
-               'Hf': 'Heat of formation',
-               'Hc': 'Heat of combustion', 
-               'Hfus': 'Heat of fusion',
-               'Hsub': 'Heat of sublimation',
-               'S': 'Entropy',
-               'S0': 'Absolute entropy of formation',
-               'G': 'Gibbs free energy',
-               'U': 'Internal energy',
-               'H_excess': 'Excess enthalpy',
-               'S_excess': 'Excess entropy',
-               'R': 'Universal gas constant',
-               'Zc': 'Critical compressibility',
-               'dZ': 'Change in compressibility factor',
-               'omega': 'Acentric factor',
-               'dipole': 'Dipole momment',
-               'delta': 'Solubility parameter',
-               'epsilon': 'Relative permittivity',
-               'similarity_variable': 'Heat capacity similarity variable',
-               'iscyclic_aliphatic': 'Whether a chemical is cyclic aliphatic',
-               'has_hydroxyl': 'Whether a polar chemical has hydroxyl groups',
-               'atoms': 'Atom-count pairs'
+definitions = {
+    'MW': 'Molecular weight',
+    'T': 'Temperature',
+    'Tr': 'Reduced temperature',
+    'Tm': 'Melting point temperature',
+    'Tb': 'Boiling point temperature',
+    'Tbr': 'Reduced boiling point temperature',
+    'Tt': 'Triple point temperature',
+    'Tc': 'Critical point temperature',
+    'P': 'Pressure',
+    'Pr': 'Reduced pressure',
+    'Pc': 'Critical point pressure',
+    'Psat': 'Saturated vapor pressure',
+    'Pt': 'Triple point pressure',
+    'V': 'Molar volume',
+    'Vc': 'Critical point volume',
+    'Cp': 'Specific heat capacity',
+    'Cn': 'Molar heat capacity',
+    'rho': 'Density',
+    'rhoc': 'Critical point density',
+    'nu': 'Kinematic viscosity',
+    'mu': 'hydraulic viscosity',
+    'sigma': 'Surface tension',
+    'kappa': 'Thermal conductivity',
+    'alpha': 'Thermal diffusivity',
+    'Hvap': 'Heat of vaporization',
+    'H': 'Enthalpy',
+    'Hf': 'Heat of formation',
+    'Hc': 'Heat of combustion', 
+    'Hfus': 'Heat of fusion',
+    'Hsub': 'Heat of sublimation',
+    'S': 'Entropy',
+    'S0': 'Absolute entropy of formation',
+    'G': 'Gibbs free energy',
+    'U': 'Internal energy',
+    'H_excess': 'Excess enthalpy',
+    'S_excess': 'Excess entropy',
+    'R': 'Universal gas constant',
+    'Zc': 'Critical compressibility',
+    'dZ': 'Change in compressibility factor',
+    'omega': 'Acentric factor',
+    'dipole': 'Dipole momment',
+    'delta': 'Solubility parameter',
+    'epsilon': 'Relative permittivity',
+    'similarity_variable': 'Heat capacity similarity variable',
+    'iscyclic_aliphatic': 'Whether a chemical is cyclic aliphatic',
+    'has_hydroxyl': 'Whether a polar chemical has hydroxyl groups',
+    'atoms': 'Atom-count pairs'
 }
 
 types = {'atoms': 'Dict[str, int]'}
@@ -393,3 +446,5 @@ for var in ('mu', 'Cn', 'H', 'S', 'V', 'kappa', 'H_excess', 'S_excess'):
         phase_var = var + '.' + tag
         phase_var2 = var + '_' + tag
         definitions[phase_var] = definitions[phase_var2] = phase + definition
+
+pint.BioSTEAM_units_loaded = True

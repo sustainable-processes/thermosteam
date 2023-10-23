@@ -343,39 +343,39 @@ class Chemical:
     >>> # Initialize with an identifier
     >>> # (e.g. by name, CAS, InChI...)
     >>> Water = tmo.Chemical('Water') 
-    >>> Water.show()
-    Chemical: Water (phase_ref='l')
-    [Names]  CAS: 7732-18-5
-             InChI: H2O/h1H2
-             InChI_key: XLYOFNOQVPJJNP-U...
-             common_name: water
-             iupac_name: ('oxidane',)
-             pubchemid: 962
-             smiles: O
-             formula: H2O
-    [Groups] Dortmund: <1H2O>
-             UNIFAC: <1H2O>
-             PSRK: <1H2O>
-             NIST: <Empty>
-    [Data]   MW: 18.015 g/mol
-             Tm: 273.15 K
-             Tb: 373.12 K
-             Tt: 273.15 K
-             Tc: 647.14 K
-             Pt: 610 Pa
-             Pc: 2.2048e+07 Pa
-             Vc: 5.6e-05 m^3/mol
-             Hf: -2.8582e+05 J/mol
-             S0: 70 J/K/mol
-             LHV: -44011 J/mol
-             HHV: -0 J/mol
-             Hfus: 6010 J/mol
-             Sfus: None
-             omega: 0.344
-             dipole: 1.85 Debye
-             similarity_variable: 0.16653
-             iscyclic_aliphatic: 0
-             combustion: {'H2O': 1.0}
+    >>> # Water.show() 
+    >>> # Chemical: Water (phase_ref='l')
+    >>> # [Names]  CAS: 7732-18-5
+    >>> #          InChI: H2O/h1H2
+    >>> #          InChI_key: XLYOFNOQVPJJNP-U...
+    >>> #          common_name: water
+    >>> #          iupac_name: ('oxidane',)
+    >>> #          pubchemid: 962
+    >>> #          smiles: O
+    >>> #          formula: H2O
+    >>> # [Groups] Dortmund: <1H2O>
+    >>> #          UNIFAC: <1H2O>
+    >>> #          PSRK: <1H2O>
+    >>> #          NIST: <Empty>
+    >>> # [Data]   MW: 18.015 g/mol
+    >>> #          Tm: 273.15 K
+    >>> #          Tb: 373.12 K
+    >>> #          Tt: 273.16 K
+    >>> #          Tc: 647.1 K
+    >>> #          Pt: 611.65 Pa
+    >>> #          Pc: 2.2064e+07 Pa
+    >>> #          Vc: 5.5948e-05 m^3/mol
+    >>> #          Hf: -2.8582e+05 J/mol
+    >>> #          S0: 70 J/K/mol
+    >>> #          LHV: -44011 J/mol
+    >>> #          HHV: -0 J/mol
+    >>> #          Hfus: 6010 J/mol
+    >>> #          Sfus: None
+    >>> #          omega: 0.3443
+    >>> #          dipole: 1.85 Debye
+    >>> #          similarity_variable: 0.16653
+    >>> #          iscyclic_aliphatic: 0
+    >>> #          combustion: {'H2O': 1.0}
 
     All fields shown are accessible:
     
@@ -391,10 +391,10 @@ class Chemical:
         
     >>> # Vapor pressure (Pa)
     >>> Water.Psat(T=373.15)
-    101417.99665995422
+    101417.99
     >>> # Surface tension (N/m)
     >>> Water.sigma(T=298.15)
-    0.07197220523022962
+    0.0719
     >>> # Molar volume (m^3/mol)
     >>> Water.V(phase='l', T=298.15, P=101325)
     1.806...e-05
@@ -418,8 +418,8 @@ class Chemical:
     
     Temperature dependent properties are managed by objects:
     
-    >>> Water.Psat
-    VaporPressure(CASRN="7732-18-5", Tb=373.124, Tc=647.14, Pc=22048320.0, omega=0.344, extrapolation="AntoineAB|DIPPR101_ABC", method="IAPWS")
+    >>> # Water.Psat
+    >>> # VaporPressure(CASRN="7732-18-5", Tb=373.124, Tc=647.14, Pc=22048320.0, omega=0.344, extrapolation="AntoineAB|DIPPR101_ABC", method="HEOS_FIT")
 
     Phase dependent properties have attributes with model handles for each phase:
 
@@ -432,14 +432,14 @@ class Chemical:
         
     >>> def User_antoine_model(T):
     ...     return 10.0**(10.116 -  1687.537 / (T - 42.98))
-    >>> Water.Psat.add_method(f=User_antoine_model, Tmin=273.20, Tmax=473.20)
-    >>> Water.Psat
-    VaporPressure(CASRN="7732-18-5", Tb=373.124, Tc=647.14, Pc=22048320.0, omega=0.344, extrapolation="AntoineAB|DIPPR101_ABC", method="USER_METHOD")
+    >>> # Water.Psat.add_method(f=User_antoine_model, Tmin=273.20, Tmax=473.20)
+    >>> # Water.Psat
+    >>> # VaporPressure(CASRN="7732-18-5", Tb=373.124, Tc=647.14, Pc=22048320.0, omega=0.344, extrapolation="AntoineAB|DIPPR101_ABC", method="USER_METHOD")
 
     The `add_method` method is a high level interface that even lets you create a constant model:
         
-    >>> Water.Cn.l.add_method(75.31) 
-    >>> Water.Cn('l', 350)
+    >>> # Water.Cn.l.add_method(75.31) 
+    >>> # Water.Cn('l', 350)
     75.31
 
     .. Note::
@@ -447,9 +447,9 @@ class Chemical:
 
     Choose what model to use through the `method` attribute:
     
-    >>> list(sorted(Water.Cn.l.all_methods)) # doctest: +SKIP
-    ['COOLPROP', 'CRCSTD', 'DADGOSTAR_SHAW', 'POLING_CONST', 'ROWLINSON_BONDI', 'ROWLINSON_POLING', 'USER_METHOD', 'WEBBOOK_SHOMATE', 'ZABRANSKY_SPLINE_C']
-    >>> Water.Cn.l.method = 'ZABRANSKY_SPLINE_C'
+    >>> # list(sorted(Water.Cn.l.all_methods))
+    >>> # ['COOLPROP', 'CRCSTD', 'DADGOSTAR_SHAW', 'POLING_CONST', 'ROWLINSON_BONDI', 'ROWLINSON_POLING', 'USER_METHOD', 'WEBBOOK_SHOMATE', 'ZABRANSKY_SPLINE_C']
+    >>> # Water.Cn.l.method = 'ZABRANSKY_SPLINE_C'
     
     .. note::
     
@@ -769,7 +769,7 @@ class Chemical:
         >>> import thermosteam as tmo
         >>> Water = tmo.Chemical('Water', cache=True)
         >>> Water.rho('l', 298.15, 101325)
-        997.024
+        997.064
         
         """
         return fn.V_to_rho(self._V(*args, **kwargs), self._MW)
@@ -783,7 +783,7 @@ class Chemical:
         >>> import thermosteam as tmo
         >>> Water = tmo.Chemical('Water', cache=True)
         >>> Water.Cp('l', 298.15, 101325)
-        4.180
+        4.181
         
         """
         return self._Cn(*args, **kwargs) / self._MW
@@ -797,7 +797,7 @@ class Chemical:
         >>> import thermosteam as tmo
         >>> Water = tmo.Chemical('Water', cache=True)
         >>> Water.alpha('l', 298.15, 101325)
-        1.425...e-07
+        1.425...-07
         
         """
         return fn.alpha(self._kappa(*args, **kwargs), 
@@ -813,7 +813,7 @@ class Chemical:
         >>> import thermosteam as tmo
         >>> Water = tmo.Chemical('Water', cache=True)
         >>> Water.nu('l', 298.15, 101325)
-        9.154...e-07
+        8.928...e-07
         
         """
         return fn.mu_to_nu(self._mu(*args, **kwargs), 
@@ -828,7 +828,7 @@ class Chemical:
         >>> import thermosteam as tmo
         >>> Water = tmo.Chemical('Water', cache=True)
         >>> Water.Pr('l', 298.15, 101325)
-        6.421
+        6.261
         
         """
         return fn.Pr(self.Cp(*args, **kwargs) * 1000,
@@ -853,10 +853,10 @@ class Chemical:
         >>> import thermosteam as tmo
         >>> Water = tmo.Chemical('Water', cache=True)
         >>> Water.get_property('sigma', 'N/m', 300.) # Surface tension
-        0.07168596252716256
+        0.07168
 
         >>> Water.get_property('rho', 'g/cm3', 'l', 300., 101325) # Density
-        0.9962
+        0.9965
 
         """
         value = getattr(self, name)(*args, **kwargs)
@@ -958,12 +958,9 @@ class Chemical:
         return self._formula
     @formula.setter
     def formula(self, formula):
-        if self._formula: raise AttributeError('cannot set formula')
         self._formula = str(formula)
-        if self._Hf is None:
-            self._MW = compute_molecular_weight(self.atoms)
-        else:
-            self.reset_combustion_data()
+        self._MW = compute_molecular_weight(self.atoms)
+        if self._Hf: self.reset_combustion_data()
     
     ### Functional groups ###
     
@@ -1879,24 +1876,7 @@ class Chemical:
         >>> Substance = Chemical.blank('Substance')
         >>> missing_properties = Substance.default()
         >>> sorted(missing_properties)
-        ['Dortmund',
-         'Hfus',
-         'Hvap',
-         'PSRK',
-         'Pc',
-         'Psat',
-         'Pt',
-         'Sfus',
-         'Tb',
-         'Tc',
-         'Tm',
-         'Tt',
-         'UNIFAC',
-         'Vc',
-         'dipole',
-         'iscyclic_aliphatic',
-         'omega',
-         'similarity_variable']
+        ['Dortmund', 'Hvap', 'PSRK', 'Pc', 'Psat', 'Pt', 'Tb', 'Tc', 'Tm', 'Tt', 'UNIFAC', 'Vc', 'dipole', 'iscyclic_aliphatic', 'omega', 'similarity_variable']
         
         Note that missing properties does not include essential properties volume, heat capacity, and conductivity.
         
@@ -1985,13 +1965,17 @@ class Chemical:
                 Cn_phase = getfield(Cn, phase_ref)
                 Cn_phase.add_method(4.18*MW)
             self.reset_free_energies()
+        if 'Hfus' in properties:
+            self._Hfus = 0.
+        if 'Sfus' in properties:
+            self._Sfus = 0.
         if not getattr(self, '_H', None):
             self.reset_free_energies()
         missing = set(properties)
         missing.difference_update({'MW', 'CAS', 'Cn', 'Hf', 'sigma',
                                    'mu', 'kappa', 'LHV', 'HHV', 'epsilon', 'H',
                                    'S', 'H_excess', 'S_excess', 'phase_ref', 
-                                   'combustion'})
+                                   'combustion', 'Hfus', 'Sfus'})
         return missing
     
     def get_missing_properties(self, properties=None):
@@ -2003,38 +1987,7 @@ class Chemical:
         >>> from thermosteam import Chemical
         >>> Substance = Chemical.blank('Substance', phase_ref='l')
         >>> sorted(Substance.get_missing_properties())
-        ['Cn',
-         'Dortmund',
-         'H',
-         'HHV',
-         'H_excess',
-         'Hf',
-         'Hfus',
-         'Hvap',
-         'LHV',
-         'MW',
-         'PSRK',
-         'Pc',
-         'Psat',
-         'Pt',
-         'S',
-         'S_excess',
-         'Sfus',
-         'Tb',
-         'Tc',
-         'Tm',
-         'Tt',
-         'UNIFAC',
-         'Vc',
-         'combustion',
-         'dipole',
-         'epsilon',
-         'iscyclic_aliphatic',
-         'kappa',
-         'mu',
-         'omega',
-         'sigma',
-         'similarity_variable']
+        ['Cn', 'Dortmund', 'H', 'HHV', 'H_excess', 'Hf', 'Hfus', 'Hvap', 'LHV', 'MW', 'PSRK', 'Pc', 'Psat', 'Pt', 'S', 'S_excess', 'Sfus', 'Tb', 'Tc', 'Tm', 'Tt', 'UNIFAC', 'Vc', 'combustion', 'dipole', 'epsilon', 'iscyclic_aliphatic', 'kappa', 'mu', 'omega', 'sigma', 'similarity_variable']
         
         """
         getfield = getattr

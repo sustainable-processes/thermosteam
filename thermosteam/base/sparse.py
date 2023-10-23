@@ -16,6 +16,7 @@ __all__ = (
 
 open_slice = slice(None)
 bools = frozenset([bool, np.bool_, np.dtype('bool')])
+ndim_max = 3
 
 # TODO: With python 3.10, use strict=True zip kwarg
 sparse_array_imath = """
@@ -399,7 +400,7 @@ def sparse(arr, copy=False, vector_size=None):
     sparse([[0., 1., 2.],
             [3., 2., 0.]])
     
-    Create a sparse array from an a list of dictionaries of index-nonzero value pairs:
+    Create a sparse array from a list of dictionaries of index-nonzero value pairs:
     
     >>> sa = sparse(
     ...     [{1: 1, 2: 2},
@@ -456,6 +457,8 @@ def get_ndim(value):
         ndim += 1
         try: value = value.__iter__().__next__()
         except: break
+        if ndim > ndim_max:
+            raise ValueError(f'index dimensions exceed {ndim_max}')
     return ndim
 
 def reduce_ndim(value):
@@ -470,18 +473,23 @@ def reduce_ndim(value):
             size = 0
         return value, ndim, size
     else:
-        ndim = size = 0
+        ndim = size = rdim = 0
         while hasattr(value, '__len__'): 
             size = len(value)
             if size == 1:
                 value = value[0]
+                rdim += 1
             else: 
                 dummy = value
                 while hasattr(dummy, '__iter__'):
                     ndim += 1
                     try: dummy = dummy.__iter__().__next__()
                     except: break
+                    if ndim > ndim_max:
+                        raise ValueError(f'value dimensions exceed {ndim_max}')
                 break
+            if rdim > ndim_max:
+                raise ValueError(f'value dimensions exceed {ndim_max}')
         return value, ndim, size
 
 def get_array_properties(index):
@@ -491,6 +499,8 @@ def get_array_properties(index):
         ndim += 1
         try: index = index.__iter__().__next__()
         except: break
+        if ndim > ndim_max:
+            raise ValueError(f'index dimensions exceed {ndim_max}')
     return ndim, index.__class__ in bools
 
 def sum_sparse_vectors(svs):
@@ -1488,8 +1498,7 @@ class SparseVector:
     
     def negative_keys(self):
         dct = self.dct
-        for i in dct:
-            if dct[i] < 0.: yield i
+        return {i for i in dct if dct[i] < 0.}
     
     def negative_index(self):
         dct = self.dct
@@ -1725,7 +1734,7 @@ class SparseVector:
             new = dct.copy()
             for i, j in other_dct.items():
                 if i in dct:
-                    j = dct[i] + j
+                    j += dct[i]
                     if j: new[i] = j
                     else: del new[i]
                 else:
@@ -2045,7 +2054,7 @@ class SparseVector:
         other_size = other.size
         other_dct = other.dct
         if size == other_size:
-            new = {i: dct[i] * other_dct[i] for i in dct.keys() & other_dct.keys()}
+            new = {i: dct[i] * other_dct[i] for i in dct if i in other_dct}
         elif size == 1 and other_size: 
             size = other_size
             if 0 in dct: 
@@ -2148,7 +2157,7 @@ class SparseVector:
         other_dct = other.dct
         if size == other_size:
             if len(dct) > len(other_dct): raise ZeroDivisionError('division by zero')
-            new = {i: dct[i] / other_dct[i] for i in dct.keys() & other_dct.keys()}
+            new = {i: dct[i] / other_dct[i] for i in dct if i in other_dct}
         elif size == 1 and other_size: 
             if 0 in dct: 
                 if len(other_dct) != other_size: raise ZeroDivisionError('division by zero')
@@ -2534,7 +2543,7 @@ class SparseLogicalVector:
     def has_negatives(self):
         return False
     
-    def negative_keys(self): ()
+    def negative_keys(self): set()
     
     def negative_index(self): [],
     
