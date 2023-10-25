@@ -19,4 +19,3 @@ MM- = 10**6
 Debye = debye
 CO2e = [CO2] = CO2eq = CO2
 GGE = 114000*Btu
-degree_Celsius = celsius
