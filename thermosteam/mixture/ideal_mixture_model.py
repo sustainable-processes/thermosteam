@@ -108,7 +108,8 @@ class IdealEntropyModel:
         if mol.__class__ is not SparseVector: mol = SparseVector(mol)
         total_mol = mol.sum()
         models = self.models
-        return sum([j * models[i](phase, T, P) + j * log(j / total_mol) for i, j in mol.dct.items()])
+        # return sum([j * models[i](phase, T, P) + j * log(j / total_mol) for i, j in mol.dct.items()])
+        return sum([j * models[i](phase, T, P)-8.314* j * log(j / total_mol) for i, j in mol.dct.items()])
     
 
 class IdealTMixtureModel:
