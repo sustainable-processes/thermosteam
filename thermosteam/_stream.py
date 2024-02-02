@@ -25,9 +25,11 @@ from ._phase import valid_phases
 if TYPE_CHECKING:
     from .base import SparseVector, SparseArray
     from numpy.typing import NDArray
-    from typing import Optional, Sequence
+    from typing import Optional, Sequence, Callable
     import biosteam as bst
 # from .constants import g
+
+MaterialIndexer = tmo.indexer.MaterialIndexer
 
 __all__ = ('Stream',)
 
@@ -258,7 +260,7 @@ class Stream:
         '_bubble_point_cache', '_dew_point_cache',
         '_vle_cache', '_lle_cache', '_sle_cache',
         '_sink', '_source', '_price', '_property_cache_key',
-        '_property_cache', 'characterization_factors',
+        '_property_cache', 'characterization_factors', 'equations',
         'port', # '_velocity', '_height'
     )
     line = 'Stream'
@@ -289,6 +291,7 @@ class Stream:
                  vlle: Optional[bool]=False,
                  # velocity=0., height=0.,
                  **chemical_flows:float):
+        self.equations: dict[str, list[Callable]] = {} 
         #: Characterization factors for life cycle assessment [impact/kg].
         self.characterization_factors: dict[str, float] = {} if characterization_factors is None else {}
         self._thermal_condition = tmo.ThermalCondition(T, P)
@@ -344,9 +347,38 @@ class Stream:
         self.set_data(data)
         return self
 
+    def __getitem__(self, key):
+        phase = self.phase
+        if key.lower() == phase.lower(): return self
+        raise tmo.UndefinedPhase(phase)
+    
     def __reduce__(self):
         return self.from_data, (self.get_data(), self._ID, self._price, self.characterization_factors, self._thermo)
 
+    def equation(self, variable, f=None):
+        if f is None: return lambda f: self.equation(variable, f)
+        equations = self.equations
+        if variable in equations:
+            equations[variable].append(f)
+        else:
+            equations[variable] = [f]
+            
+    def _create_linear_equations(self, variable):
+        equations = self.equations
+        if variable in equations:
+            return [i() for i in equations[variable]]
+        else:
+            return []
+
+    def _get_decoupled_variable(self, variable): pass
+
+    def _update_decoupled_variable(self, variable, value):
+        if variable in ('mol', 'mol-LLE'): 
+            value[value < 0] = 0
+            self.mol[:] = value
+        else:
+            raise NotImplementedError(f'variable {variable!r} cannot be updated')
+    
     def scale(self, scale):
         """
         Multiply flow rate by given scale.
@@ -1004,8 +1036,13 @@ class Stream:
     @F_mass.setter
     def F_mass(self, value):
         F_mass = self.F_mass
-        if not F_mass: raise AttributeError("undefined composition; cannot set flow rate")
-        self.imol.data *= value/F_mass
+        if F_mass: 
+            self.imol.data *= value/F_mass
+        elif value:
+            raise AttributeError("undefined composition; cannot set flow rate")
+        else: 
+            self.empty()
+        
     @property
     def F_vol(self) -> float:
         """Total volumetric flow rate [m3/hr]."""
@@ -1229,11 +1266,15 @@ class Stream:
     @property
     def rho(self) -> float:
         """Density [kg/m^3]."""
-        return fn.V_to_rho(self.V, self.MW)
+        V = self.V
+        if V is None: return V
+        return fn.V_to_rho(V, self.MW)
     @property
     def nu(self) -> float:
         """Kinematic viscosity [m^2/s]."""
-        return fn.mu_to_nu(self.mu, self.rho)
+        mu = self.mu
+        if mu is None: return mu
+        return fn.mu_to_nu(mu, self.rho)
     @property
     def Pr(self) -> float:
         """Prandtl number [-]."""
@@ -1432,9 +1473,9 @@ class Stream:
                     self.vle(T=self.T, P=P)
                 self.reduce_phases()
             else:
-                if energy_balance: H = sum([i.H for i in streams], Q)
-                self._imol.mix_from([i._imol for i in streams])
-                if energy_balance and not self.isempty():
+                if energy_balance: 
+                    self._imol.mix_from([i._imol for i in streams])
+                    H = sum([i.H for i in streams], Q)
                     if conserve_phases: 
                         self.H = H
                     else:
@@ -1444,6 +1485,8 @@ class Stream:
                             self.phases = self.phase + ''.join([i.phase for i in others])
                             self._imol.mix_from([i._imol for i in streams])
                             self.H = H
+                else:
+                    self._imol.mix_from([i._imol for i in streams])
                 
     def split_to(self, s1, s2, split, energy_balance=True):
         """
@@ -1627,7 +1670,7 @@ class Stream:
         flow (kg/hr): Water  2
 
         """
-        if isinstance(other, tmo.MultiStream):
+        if isinstance(other.imol, MaterialIndexer):
             phases = other.phases
             if len(phases) == 1:
                 phase, = phases
@@ -1777,7 +1820,10 @@ class Stream:
                 self.mol[:] = other.mol
             else:
                 self.empty()
-                CASs, values = zip(*[(i, j) for i, j in zip(other_chemicals.CASs, other_mol.nonzero_items())])
+                CASs = other_chemicals.CASs
+                dct = other_mol.dct
+                CASs = [CASs[i] for i in dct]
+                values = list(dct.values())
                 self.imol[CASs] = values
             if remove: 
                 if isinstance(other, tmo.MultiStream):
@@ -1934,7 +1980,7 @@ class Stream:
         0
         
         """
-        self._imol.data[:] = 0.
+        self._imol.data.clear()
     
     ### Equilibrium ###
     
@@ -2004,7 +2050,11 @@ class Stream:
                 vle(T=T, P=P)
                 done[0] = no_vapor and not data[1].any() # No VLE
             return data.to_array()
-        data[:] = flx.fixed_point(f, data / total_flow, xtol=1e-3, checkiter=False, checkconvergence=False, convergenceiter=10) * total_flow
+        data[:] = total_flow * flx.fixed_point(
+            f, data / total_flow, xtol=1e-3, 
+            checkiter=False, checkconvergence=False, 
+            convergenceiter=10
+        )
 
     @property
     def vle_chemicals(self) -> list[tmo.Chemical]:
@@ -2457,6 +2507,8 @@ class Stream:
             self._sle_cache = eq.SLECache(self._imol,
                                           self._thermal_condition,
                                           self._thermo)
+    def reduce_phases(self): 
+        """Remove empty phases."""
     
     ### Representation ###
     

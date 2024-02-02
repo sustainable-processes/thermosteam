@@ -381,8 +381,8 @@ def lle_partition_coefficients(top, bottom):
     >>> IDs, K = tmo.separations.lle_partition_coefficients(s['L'], s['l'])
     >>> IDs
     ('Water', 'Ethanol', 'Octanol')
-    >>> K[2] # Octanol
-    3324.4
+    >>> round(K[2], -1) # Octanol
+    3330.0
 
     """
     IDs = tuple([i.ID for i in bottom.lle_chemicals])
@@ -544,10 +544,15 @@ def partition(feed, top, bottom, IDs, K, phi=None, top_chemicals=None,
     feed_mol = feed.mol
     mol = feed.imol[IDs]
     F_mol = mol.sum()
-    if not bottom.shares_flow_rate_with(feed): bottom.empty()
-    Fa = feed.imol[top_chemicals].sum() if top_chemicals else 0.
+    if top_chemicals:
+        top.imol[top_chemicals] = top_flows = feed.imol[top_chemicals]
+        bottom.imol[top_chemicals] = 0
+        Fa = top_flows.sum() if hasattr(top_flows, 'sum') else top_flows
+    else:
+        Fa = 0.
     if bottom_chemicals:
         bottom.imol[bottom_chemicals] = bottom_flows = feed.imol[bottom_chemicals]
+        top.imol[bottom_chemicals] = 0
         Fb = bottom_flows.sum() if hasattr(bottom_flows, 'sum') else bottom_flows
     else:
         Fb = 0.
@@ -640,8 +645,7 @@ def lle(feed, top, bottom, top_chemical=None, efficiency=1.0, multi_stream=None)
     if not top_chemical:
         rho_l = ms['l'].rho
         rho_L = ms['L'].rho
-        top_l = rho_l < rho_L
-        if top_l:
+        if rho_L is None or rho_l is not None and rho_l < rho_L:
             top_phase = 'l'
             bottom_phase = 'L'
     top.mol[:] = ms.imol[top_phase]

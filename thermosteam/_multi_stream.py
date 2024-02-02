@@ -253,7 +253,7 @@ class MultiStream(Stream):
         if vlle: self.vlle(T, P)
         
     @classmethod
-    def from_streams(cls, streams):
+    def from_streams(cls, streams, thermo=None):
         if not streams: raise ValueError('at least one stream must be passed')
         self = cls.__new__(cls)
         self._streams = streams_by_phase = {i.phase: i for i in streams}
@@ -264,7 +264,7 @@ class MultiStream(Stream):
         self.characterization_factors = {}
         self._thermal_condition = base._thermal_condition
         for i in others: i._thermal_condition = base._thermal_condition
-        self._load_thermo(base.thermo)
+        self._load_thermo(thermo or base.thermo)
         self.price = 0
         self._imol = MolarFlowIndexer.from_data(
             [streams_by_phase[i]._imol.data for i in phases], phases, 
@@ -750,19 +750,18 @@ class MultiStream(Stream):
         flow: 0
         
         """
-        if self.chemicals is not other.chemicals:
+        if self.chemicals is not other.chemicals and self.chemicals.IDs != other.chemicals.IDs:
             raise ValueError('other stream must have the same chemicals defined to copy flow')
-        other_ismultistream = isinstance(other, MultiStream)
-        if other_ismultistream: self.phases = [*self.phases, *other.phases]
         IDs_index = self.chemicals.get_index(IDs)
         phase_index = self.imol.get_phase_index(phase)
         data = self.imol.data
         other_data = other.imol.data
+        multiphase = other_data.ndim == 2
         if exclude:
             data = self.imol.data
             other_data = other.imol.data
             original_data = data.copy()
-            if other_ismultistream:
+            if multiphase:
                 data[:] = other_data
                 data[phase_index, IDs_index] = original_data[phase_index, IDs_index]
                 if remove:
@@ -777,7 +776,7 @@ class MultiStream(Stream):
                     excluded_data = other_data[IDs_index]
                     other_data[:] = 0.
                     other_data[IDs_index] = excluded_data   
-        elif other_ismultistream:
+        elif multiphase:
             data[phase_index, IDs_index] = other_data[phase_index, IDs_index]
             if remove: other_data[phase_index, IDs_index] = 0.
         else:
