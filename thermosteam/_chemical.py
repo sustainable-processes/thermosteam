@@ -1679,6 +1679,8 @@ class Chemical:
         T_ref = self.T_ref
         H_ref = self.H_ref
         Tc = self._Tc
+        MW=self.MW
+        V=self.V
         single_phase = self._locked_state
         if isinstance(Cn, PhaseHandle):
             Cn_s = Cn.s
@@ -1781,7 +1783,8 @@ class Chemical:
             # Enthalpy and Entropy
             if single_phase:
                 # Reference state does not matter because phase will not change
-                self._H = Enthalpy.functor(Cn, T_ref, H_ref)
+                self._H = Enthalpy.functor(Cn, T_ref, H_ref,P_ref=P_ref,V=V,MW=MW)
+                # self._H = Enthalpy.functor(Cn, T_ref, H_ref)
                 if phase_ref == 'g':
                     self._S = EntropyGas.functor(Cn, T_ref, P_ref, S0)
                 else:
@@ -1808,7 +1811,8 @@ class Chemical:
                     self._S = EntropyRefSolid(sdata, ldata, gdata, Tc)
                 elif phase_ref == 'l':
                     sdata = (Cn_s, H_int_Tm_to_T_ref_l, Hfus, Tm, H_ref)
-                    ldata = (Cn_l, T_ref, H_ref)
+                    # ldata = (Cn_l, T_ref, H_ref)
+                    ldata=(Cn_l,T_ref,H_ref,P_ref,V.l,MW)
                     gdata = (Cn_g, H_int_T_ref_to_Tb_l, Hvap_Tb, Tb, H_ref)
                     self._H = EnthalpyRefLiquid(sdata, ldata, gdata, Tc)
                     sdata = (Cn_s, S_int_Tm_to_T_ref_l, Sfus, Tm, S0)

@@ -20,10 +20,19 @@ def get_excess_energy(eos, T, P, free_energy, phase):
     except: # Maybe identified closer to another phase near supercritical conditions (doesn't matter)
         name = f"{free_energy}_dep_g" if phase == 'l' else f"{free_energy}_dep_l"
         return getattr(eos, name)
-
 @functor(var='H')
-def Enthalpy(T, P, Cn, T_ref, H_ref):
-    return H_ref + Cn.T_dependent_property_integral(T_ref, T)
+def Enthalpy(T, P, Cn, T_ref, H_ref,P_ref=101325,V=None,MW=None):
+    term1=H_ref + Cn.T_dependent_property_integral(T_ref, T)
+    if V is not None and MW is not None: 
+        term2=V(T=T,P=P)-(T*V.T_dependent_property_integral(T_ref, T)) # units are in m^3/mol
+        term2=(term2*1000/MW)*(P-P_ref) #   Converting to m^3/kg and multiplying by dP
+        return term1+term2
+    else:
+        return term1
+
+# @functor(var='H')
+# def Enthalpy(T, P, Cn, T_ref, H_ref):
+#     return H_ref + Cn.T_dependent_property_integral(T_ref, T)
 
 @functor(var='S')
 def Entropy(T, P, Cn, T_ref, S0):
@@ -34,9 +43,20 @@ def EntropyGas(T, P, Cn, T_ref, P_ref, S0):
     return S0 + Cn.T_dependent_property_integral_over_T(T_ref, T) - R*log(P/P_ref)
 
 @functor(var='H.l')
-def Liquid_Enthalpy_Ref_Liquid(T, P, Cn_l, T_ref, H_ref):
-    """Enthapy (kJ/kmol) disregarding pressure and assuming the specified phase."""
-    return H_ref + Cn_l.T_dependent_property_integral(T_ref, T)
+def Liquid_Enthalpy_Ref_Liquid(T, P, Cn_l, T_ref, H_ref,P_ref=101325,V_l=None,MW=None):
+    """Enthapy (kJ/kmol)  assuming the specified phase."""
+    term1=H_ref + Cn_l.T_dependent_property_integral(T_ref, T)
+    if V_l is not None and MW is not None:
+        term2=V_l(T=T,P=P)-(T*V_l.T_dependent_property_integral(T_ref, T)) # units are in m^3/mol
+        term2=(term2*1000/MW)*(P-P_ref) #   Converting to m^3/kg and multiplying by dP
+        return term1+term2
+    else: 
+        return term1
+
+# @functor(var='H.l')
+# def Liquid_Enthalpy_Ref_Liquid(T, P, Cn_l, T_ref, H_ref):
+#     """Enthapy (kJ/kmol) disregarding pressure and assuming the specified phase."""
+#     return H_ref + Cn_l.T_dependent_property_integral(T_ref, T)
 
 @functor(var='H.l')
 def Liquid_Enthalpy_Ref_Gas(T, P, Cn_l, H_int_Tb_to_T_ref_g, Hvap_Tb, Tb, H_ref):
