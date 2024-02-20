@@ -23,9 +23,12 @@ def get_excess_energy(eos, T, P, free_energy, phase):
 @functor(var='H')
 def Enthalpy(T, P, Cn, T_ref, H_ref,P_ref=101325,V=None,MW=None):
     term1=H_ref + Cn.T_dependent_property_integral(T_ref, T)
-    if V is not None and MW is not None: 
-        term2=V(T=T,P=P)-(T*V.T_dependent_property_integral(T_ref, T)) # units are in m^3/mol
-        term2=(((term2*1000/MW)*(P-P_ref))*MW)/1000 #   Converting to m^3/kg and multiplying by dP, to give J/kg then converting to kJ/kmol
+    if V is not None and MW is not None:
+        try: 
+            term2=V(T=T,P=P)-(T*V.TP_dependent_property_derivative_T(T_ref, T)) # units are in m^3/mol, for derivative see thermo package utils/tp_dependent_property.py/TPDependentProperty/TP_dependent_property_derivative_T
+        except Exception:
+            term2=V(T=T,P=P)
+        term2=term2*(P-P_ref) #m^3/mol * dP giving J/mol or kJ/kmol
         return term1+term2
     else:
         return term1
@@ -43,12 +46,12 @@ def EntropyGas(T, P, Cn, T_ref, P_ref, S0):
     return S0 + Cn.T_dependent_property_integral_over_T(T_ref, T) - R*log(P/P_ref)
 
 @functor(var='H.l')
-def Liquid_Enthalpy_Ref_Liquid(T, P, Cn_l, T_ref, H_ref,P_ref=101325,V_l=None,MW=None):
+def Liquid_Enthalpy_Ref_Liquid(T, P, Cn_l, T_ref, H_ref,P_ref=101325,V_l=None,MW=None): #See thermo package chemical.py/Chemical
     """Enthapy (kJ/kmol)  assuming the specified phase."""
     term1=H_ref + Cn_l.T_dependent_property_integral(T_ref, T)
     if V_l is not None and MW is not None:
-        term2=V_l(T=T,P=P)-(T*V_l.T_dependent_property_integral(T_ref, T)) # units are in m^3/mol
-        term2=(((term2*1000/MW)*(P-P_ref))*MW)/1000 #   Converting to m^3/kg and multiplying by dP, to give J/kg then converting to kJ/kmol
+        term2=V_l(T=T,P=P)-(T*V_l.TP_dependent_property_derivative_T(T_ref, T)) # units are in m^3/mol, for derivative see thermo package utils/tp_dependent_property.py/TPDependentProperty/TP_dependent_property_derivative_T
+        term2=term2*(P-P_ref) #m^3/mol * dP giving J/mol or kJ/kmol
         return term1+term2
     else: 
         return term1
