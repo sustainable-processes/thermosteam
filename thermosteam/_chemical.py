@@ -1690,9 +1690,12 @@ class Chemical:
             has_Cnl = bool(Cn_l)
             has_Cng = bool(Cn_g)
         elif single_phase:
-            self._H = Enthalpy.functor(Cn, T_ref, H_ref)
+            self._H = Enthalpy.functor(Cn, T_ref, H_ref,P_ref=P_ref,V=V,phase=single_phase)
             if single_phase == 'g':
-                self._S = EntropyGas.functor(Cn, T_ref, P_ref, S0)
+                if isinstance(eos,IG):
+                    self._S = EntropyGas.functor(Cn, T_ref, P_ref, S0,V=V,ideal=True)
+                else:
+                    self._S = EntropyGas.functor(Cn, T_ref, P_ref, S0,V=V,ideal=False)
             else:
                 self._S = Entropy.functor(Cn, T_ref, P_ref, S0)
             Cn_s = Cn_l = Cn_g = Cn
@@ -1783,10 +1786,13 @@ class Chemical:
             # Enthalpy and Entropy
             if single_phase:
                 # Reference state does not matter because phase will not change
-                self._H = Enthalpy.functor(Cn, T_ref, H_ref,P_ref=P_ref,V=V,MW=MW)
+                self._H = Enthalpy.functor(Cn, T_ref, H_ref,P_ref=P_ref,V=V,phase=single_phase)
                 # self._H = Enthalpy.functor(Cn, T_ref, H_ref)
                 if phase_ref == 'g':
-                    self._S = EntropyGas.functor(Cn, T_ref, P_ref, S0)
+                    if isinstance(eos,IG):
+                        self._S = EntropyGas.functor(Cn, T_ref, P_ref, S0,V=V,ideal=True)
+                    else:
+                        self._S= EntropyGas.functor(Cn, T_ref, P_ref, S0,V=V,ideal=False)
                 else:
                     self._S = Entropy.functor(Cn, T_ref, S0)
                 # Excess energies
@@ -1801,32 +1807,43 @@ class Chemical:
                     self._S_excess = Excess_Gas_Entropy_Ref_Gas.functor(eos, S_dep_ref_g)
             else:
                 if phase_ref == 's':
-                    sdata = (Cn_s, T_ref, H_ref)
-                    ldata = (Cn_l, H_int_T_ref_to_Tm_s, Hfus, Tm, H_ref)
-                    gdata = (Cn_g, H_int_T_ref_to_Tm_s, Hfus, H_int_Tm_to_Tb_l, Hvap_Tb, Tb, H_ref)
+                    sdata = (Cn_s, T_ref, H_ref,P_ref,V.s)
+                    # sdata = (Cn_s, T_ref, H_ref)
+                    ldata=(Cn_l, H_int_T_ref_to_Tm_s, Hfus, Tm, H_ref,P_ref,V.l)
+                    # ldata = (Cn_l, H_int_T_ref_to_Tm_s, Hfus, Tm, H_ref)
+                    gdata = (Cn_g, H_int_T_ref_to_Tm_s, Hfus, H_int_Tm_to_Tb_l, Hvap_Tb, Tb, H_ref,P_ref,V.g)
+                    # gdata = (Cn_g, H_int_T_ref_to_Tm_s, Hfus, H_int_Tm_to_Tb_l, Hvap_Tb, Tb, H_ref)
                     self._H = EnthalpyRefSolid(sdata, ldata, gdata, Tc)
                     sdata = (Cn_s, T_ref, S0)
                     ldata = (Cn_l, S_int_T_ref_to_Tm_s, Sfus, Tm, S0)
-                    gdata = (Cn_g, S_int_T_ref_to_Tm_s, Sfus, S_int_Tm_to_Tb_l, Svap_Tb, Tb, P_ref, S0)
+                    gdata = (Cn_g, S_int_T_ref_to_Tm_s, Sfus, S_int_Tm_to_Tb_l, Svap_Tb, Tb, P_ref, S0,V.g,isinstance(eos,IG))
+                    # gdata = (Cn_g, S_int_T_ref_to_Tm_s, Sfus, S_int_Tm_to_Tb_l, Svap_Tb, Tb, P_ref, S0)
                     self._S = EntropyRefSolid(sdata, ldata, gdata, Tc)
                 elif phase_ref == 'l':
-                    sdata = (Cn_s, H_int_Tm_to_T_ref_l, Hfus, Tm, H_ref)
+                    sdata = (Cn_s, H_int_Tm_to_T_ref_l, Hfus, Tm, H_ref,P_ref,V.s)
+                    # sdata = (Cn_s, H_int_Tm_to_T_ref_l, Hfus, Tm, H_ref)
+                    ldata=(Cn_l,T_ref,H_ref,P_ref,V.l)
                     # ldata = (Cn_l, T_ref, H_ref)
-                    ldata=(Cn_l,T_ref,H_ref,P_ref,V.l,MW)
-                    gdata = (Cn_g, H_int_T_ref_to_Tb_l, Hvap_Tb, Tb, H_ref)
+                    gdata = (Cn_g, H_int_T_ref_to_Tb_l, Hvap_Tb, Tb, H_ref,P_ref,V.g)
+                    # gdata = (Cn_g, H_int_T_ref_to_Tb_l, Hvap_Tb, Tb, H_ref)
                     self._H = EnthalpyRefLiquid(sdata, ldata, gdata, Tc)
                     sdata = (Cn_s, S_int_Tm_to_T_ref_l, Sfus, Tm, S0)
                     ldata = (Cn_l, T_ref, S0)
-                    gdata = (Cn_g, S_int_T_ref_to_Tb_l, Svap_Tb, Tb, P_ref, S0)
+                    gdata = (Cn_g, S_int_T_ref_to_Tb_l, Svap_Tb, Tb, P_ref, S0,V.g,isinstance(eos,IG))
+                    # gdata = (Cn_g, S_int_T_ref_to_Tb_l, Svap_Tb, Tb, P_ref, S0)
                     self._S = EntropyRefLiquid(sdata, ldata, gdata, Tc)
                 elif phase_ref == 'g':
-                    sdata = (Cn_s, H_int_Tb_to_T_ref_g, Hvap_Tb, H_int_Tm_to_Tb_l, Hfus, Tm, H_ref)
-                    ldata = (Cn_l, H_int_Tb_to_T_ref_g, Hvap_Tb, Tb, H_ref)
-                    gdata = (Cn_g, T_ref, H_ref)
+                    sdata = (Cn_s, H_int_Tb_to_T_ref_g, Hvap_Tb, H_int_Tm_to_Tb_l, Hfus, Tm, H_ref,P_ref,V.s)
+                    # sdata = (Cn_s, H_int_Tb_to_T_ref_g, Hvap_Tb, H_int_Tm_to_Tb_l, Hfus, Tm, H_ref)
+                    ldata=(Cn_l, H_int_Tb_to_T_ref_g, Hvap_Tb, Tb, H_ref,P_ref,V.l)
+                    # ldata = (Cn_l, H_int_Tb_to_T_ref_g, Hvap_Tb, Tb, H_ref)
+                    gdata = (Cn_g, T_ref, H_ref,P_ref,V.g)
+                    # gdata = (Cn_g, T_ref, H_ref)
                     self._H = EnthalpyRefGas(sdata, ldata, gdata, Tc)
                     sdata = (Cn_s, S_int_Tb_to_T_ref_g, Svap_Tb, S_int_Tm_to_Tb_l, Sfus, Tm, S0)
                     ldata = (Cn_l, S_int_Tb_to_T_ref_g, Svap_Tb, Tb, S0)
-                    gdata = (Cn_g, T_ref, P_ref, S0)
+                    gdata = (Cn_g, T_ref, P_ref, S0,V.g,isinstance(eos,IG))
+                    # gdata = (Cn_g, T_ref, P_ref, S0)
                     self._S = EntropyRefGas(sdata, ldata, gdata, Tc)
             
                 # Excess energies

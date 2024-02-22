@@ -12,7 +12,10 @@ Free energy functors for Chemical objects.
 from .constants import R
 from .base import functor, PhaseTFunctorBuilder, PhaseTPFunctorBuilder
 from math import log
-    
+from scipy.integrate import quad
+
+epsrel=1e-5  #Relative error for integral solver
+
 def get_excess_energy(eos, T, P, free_energy, phase):
     eos = eos.to(T, P)
     name = f"{free_energy}_dep_{phase}"
@@ -21,14 +24,13 @@ def get_excess_energy(eos, T, P, free_energy, phase):
         name = f"{free_energy}_dep_g" if phase == 'l' else f"{free_energy}_dep_l"
         return getattr(eos, name)
 @functor(var='H')
-def Enthalpy(T, P, Cn, T_ref, H_ref,P_ref=101325,V=None,MW=None):
+def Enthalpy(T, P, Cn, T_ref, H_ref,P_ref=101325,V=None,phase=None):
     term1=H_ref + Cn.T_dependent_property_integral(T_ref, T)
-    if V is not None and MW is not None:
-        try: 
-            term2=V(T=T,P=P)-(T*V.TP_dependent_property_derivative_T(T_ref, T)) # units are in m^3/mol, for derivative see thermo package utils/tp_dependent_property.py/TPDependentProperty/TP_dependent_property_derivative_T
-        except Exception:
-            term2=V(T=T,P=P)
-        term2=term2*(P-P_ref) #m^3/mol * dP giving J/mol or kJ/kmol
+    if V is not None and P!=P_ref:
+        if phase in ['l','L','s','S']: #Incompressible
+            term2=V(T=T,P=P)*(P-P_ref) #m^3/mol * dP giving J/mol or kJ/kmol
+        else:
+            term2, _ = quad(pressure_term, P_ref,P, args=(V, T),epsrel=epsrel) #m^3/mol * dP giving J/mol or kJ/kmol
         return term1+term2
     else:
         return term1
@@ -37,21 +39,34 @@ def Enthalpy(T, P, Cn, T_ref, H_ref,P_ref=101325,V=None,MW=None):
 # def Enthalpy(T, P, Cn, T_ref, H_ref):
 #     return H_ref + Cn.T_dependent_property_integral(T_ref, T)
 
+def pressure_term(P,V,T): #For quad, first variable should be independent variable
+    return V(T=T,P=P)-(T*V.TP_dependent_property_derivative_T(T,P)) # units are in m^3/mol, for derivative see thermo package utils/tp_dependent_property.py/TPDependentProperty/TP_dependent_property_derivative_T
+def pressure_term_entropy(P,V,T):
+    return V.TP_dependent_property_derivative_T(T,P)
 @functor(var='S')
 def Entropy(T, P, Cn, T_ref, S0):
     return S0 + Cn.T_dependent_property_integral_over_T(T_ref, T)
 
 @functor(var='S')
-def EntropyGas(T, P, Cn, T_ref, P_ref, S0):
-    return S0 + Cn.T_dependent_property_integral_over_T(T_ref, T) - R*log(P/P_ref)
+def EntropyGas(T, P, Cn, T_ref, P_ref, S0,V=None,ideal=True):
+    term1=S0 + Cn.T_dependent_property_integral_over_T(T_ref, T)
+    if ideal:
+        term2=R*log(P/P_ref)
+    else:
+        term2, _= quad(pressure_term_entropy, P_ref,P, args=(V, T),epsrel=epsrel)
+    return term1-term2
+
+# @functor(var='S')
+# def EntropyGas(T, P, Cn, T_ref, P_ref, S0):
+#     return S0 + Cn.T_dependent_property_integral_over_T(T_ref, T) - R*log(P/P_ref)
 
 @functor(var='H.l')
-def Liquid_Enthalpy_Ref_Liquid(T, P, Cn_l, T_ref, H_ref,P_ref=101325,V_l=None,MW=None): #See thermo package chemical.py/Chemical
+def Liquid_Enthalpy_Ref_Liquid(T, P, Cn_l, T_ref, H_ref,P_ref=101325,V_l=None): #See thermo package chemical.py/Chemical
     """Enthapy (kJ/kmol)  assuming the specified phase."""
     term1=H_ref + Cn_l.T_dependent_property_integral(T_ref, T)
-    if V_l is not None and MW is not None:
-        term2=V_l(T=T,P=P)-(T*V_l.TP_dependent_property_derivative_T(T_ref, T)) # units are in m^3/mol, for derivative see thermo package utils/tp_dependent_property.py/TPDependentProperty/TP_dependent_property_derivative_T
-        term2=term2*(P-P_ref) #m^3/mol * dP giving J/mol or kJ/kmol
+    if V_l is not None and P!=P_ref: #Pressure changes
+        term2=V_l(T=T,P=P)*(P-P_ref) #m^3/mol * dP giving J/mol or kJ/kmol
+        # term2, _ = quad(pressure_term, P_ref,P, args=(V_l, T),epsrel=epsrel) #m^3/mol * dP giving J/mol or kJ/kmol
         return term1+term2
     else: 
         return term1
@@ -62,39 +77,118 @@ def Liquid_Enthalpy_Ref_Liquid(T, P, Cn_l, T_ref, H_ref,P_ref=101325,V_l=None,MW
 #     return H_ref + Cn_l.T_dependent_property_integral(T_ref, T)
 
 @functor(var='H.l')
-def Liquid_Enthalpy_Ref_Gas(T, P, Cn_l, H_int_Tb_to_T_ref_g, Hvap_Tb, Tb, H_ref):
-    return H_ref - H_int_Tb_to_T_ref_g - Hvap_Tb + Cn_l.T_dependent_property_integral(Tb, T)
+def Liquid_Enthalpy_Ref_Gas(T, P, Cn_l, H_int_Tb_to_T_ref_g, Hvap_Tb, Tb, H_ref,P_ref=101325,V_l=None):
+    term1 = H_ref - H_int_Tb_to_T_ref_g - Hvap_Tb + Cn_l.T_dependent_property_integral(Tb, T)
+    if V_l is not None and P!=P_ref: #Pressure changes
+        term2=V_l(T=T,P=P)*(P-P_ref) #m^3/mol * dP giving J/mol or kJ/kmol
+        # term2, _ = quad(pressure_term, P_ref,P, args=(V_l, T),epsrel=epsrel) #m^3/mol * dP giving J/mol or kJ/kmol
+        return term1+term2
+    else:
+        return term1
     
+
+# @functor(var='H.l')
+# def Liquid_Enthalpy_Ref_Gas(T, P, Cn_l, H_int_Tb_to_T_ref_g, Hvap_Tb, Tb, H_ref):
+#     return H_ref - H_int_Tb_to_T_ref_g - Hvap_Tb + Cn_l.T_dependent_property_integral(Tb, T)
+
 @functor(var='H.l')
-def Liquid_Enthalpy_Ref_Solid(T, Cn_l, H_int_T_ref_to_Tm_s, Hfus, Tm, H_ref):
-    return H_ref + H_int_T_ref_to_Tm_s + Hfus + Cn_l.T_dependent_property_integral(Tm, T)
+def Liquid_Enthalpy_Ref_Solid(T, P, Cn_l, H_int_T_ref_to_Tm_s, Hfus, Tm, H_ref, P_ref=101325,V_l=None):
+    term1=H_ref + H_int_T_ref_to_Tm_s + Hfus + Cn_l.T_dependent_property_integral(Tm, T)
+    if V_l is not None and P!=P_ref: #Pressure changes
+        term2=V_l(T=T,P=P)*(P-P_ref) #m^3/mol * dP giving J/mol or kJ/kmol
+        # term2, _ = quad(pressure_term, P_ref,P, args=(V_l, T),epsrel=epsrel) #m^3/mol * dP giving J/mol or kJ/kmol
+        return term1+term2
+    else:
+        return term1
     
-@functor(var='H.s')
-def Solid_Enthalpy_Ref_Solid(T, P, Cn_s, T_ref, H_ref):
-    return H_ref + Cn_s.T_dependent_property_integral(T_ref, T)
+# @functor(var='H.l')
+# def Liquid_Enthalpy_Ref_Solid(T, Cn_l, H_int_T_ref_to_Tm_s, Hfus, Tm, H_ref):
+#     return H_ref + H_int_T_ref_to_Tm_s + Hfus + Cn_l.T_dependent_property_integral(Tm, T)
 
 @functor(var='H.s')
-def Solid_Enthalpy_Ref_Liquid(T, P, Cn_s, H_int_Tm_to_T_ref_l, Hfus, Tm, H_ref):
-    return H_ref - H_int_Tm_to_T_ref_l - Hfus + Cn_s.T_dependent_property_integral(Tm, T)
+def Solid_Enthalpy_Ref_Solid(T, P, Cn_s, T_ref, H_ref, P_ref=101325,V_s=None):
+    term1=H_ref + Cn_s.T_dependent_property_integral(T_ref, T)
+    if V_s is not None and P!=P_ref: #Pressure changes
+        term2=V_s(T=T,P=P)*(P-P_ref)
+        return term1+term2
+    else:
+        return term1
+
+# @functor(var='H.s')
+# def Solid_Enthalpy_Ref_Solid(T, P, Cn_s, T_ref, H_ref):
+#     return H_ref + Cn_s.T_dependent_property_integral(T_ref, T)
+
+@functor(var='H.s')
+def Solid_Enthalpy_Ref_Liquid(T, P, Cn_s, H_int_Tm_to_T_ref_l, Hfus, Tm, H_ref,P_ref=101325,V_s=None):  
+    term1=H_ref - H_int_Tm_to_T_ref_l - Hfus + Cn_s.T_dependent_property_integral(Tm, T)
+    if V_s is not None and P!=P_ref:
+        term2=V_s(T=T,P=P)*(P-P_ref)
+        return term1+term2
+    else:
+        return term1
+
+# @functor(var='H.s')
+# def Solid_Enthalpy_Ref_Liquid(T, P, Cn_s, H_int_Tm_to_T_ref_l, Hfus, Tm, H_ref):
+#     return H_ref - H_int_Tm_to_T_ref_l - Hfus + Cn_s.T_dependent_property_integral(Tm, T)
 
 @functor(var='H.s')
 def Solid_Enthalpy_Ref_Gas(T, P, Cn_s, H_int_Tb_to_T_ref_g, Hvap_Tb,
-                           H_int_Tm_to_Tb_l, Hfus, Tm, H_ref):
-    return H_ref - H_int_Tb_to_T_ref_g - Hvap_Tb - H_int_Tm_to_Tb_l - Hfus + Cn_s.T_dependent_property_integral(Tm, T)
-    
+                           H_int_Tm_to_Tb_l, Hfus, Tm, H_ref, P_ref=101325,V_s=None):
+    term1=H_ref - H_int_Tb_to_T_ref_g - Hvap_Tb - H_int_Tm_to_Tb_l - Hfus + Cn_s.T_dependent_property_integral(Tm, T)
+    if V_s is not None and P!=P_ref:
+        term2=V_s(T=T,P=P)*(P-P_ref)
+        return term1+term2
+    else:
+        return term1
+
+# @functor(var='H.s')
+# def Solid_Enthalpy_Ref_Gas(T, P, Cn_s, H_int_Tb_to_T_ref_g, Hvap_Tb,
+#                            H_int_Tm_to_Tb_l, Hfus, Tm, H_ref):
+#     return H_ref - H_int_Tb_to_T_ref_g - Hvap_Tb - H_int_Tm_to_Tb_l - Hfus + Cn_s.T_dependent_property_integral(Tm, T)
+
 @functor(var='H.g')
-def Gas_Enthalpy_Ref_Gas(T, P, Cn_g, T_ref, H_ref):
-    return H_ref + Cn_g.T_dependent_property_integral(T_ref, T)
+def Gas_Enthalpy_Ref_Gas(T, P, Cn_g, T_ref, H_ref, P_ref=101325,V_g=None):
+    term1=H_ref + Cn_g.T_dependent_property_integral(T_ref, T)
+    if V_g is not None and P!=P_ref:
+        term2, _ = quad(pressure_term, P_ref,P, args=(V_g, T),epsrel=epsrel) #m^3/mol * dP giving J/mol or kJ/kmol
+        return term1+term2
+    else:
+        return term1
+        
+    
+# @functor(var='H.g')
+# def Gas_Enthalpy_Ref_Gas(T, P, Cn_g, T_ref, H_ref):
+#     return H_ref + Cn_g.T_dependent_property_integral(T_ref, T)
 
 @functor(var='H.g')
 def Gas_Enthalpy_Ref_Liquid(T, P, Cn_g, H_int_T_ref_to_Tb_l, Hvap_Tb, 
-                            Tb, H_ref):
-    return H_ref + H_int_T_ref_to_Tb_l + Hvap_Tb + Cn_g.T_dependent_property_integral(Tb, T)
+                            Tb, H_ref,P_ref=101325,V_g=None):
+    term1=H_ref + H_int_T_ref_to_Tb_l + Hvap_Tb + Cn_g.T_dependent_property_integral(Tb, T)
+    if V_g is not None and P!=P_ref:
+        term2, _ = quad(pressure_term, P_ref,P, args=(V_g, T),epsrel=epsrel) #m^3/mol * dP giving J/mol or kJ/kmol
+        return term1+term2
+    else:
+        return term1
+
+# @functor(var='H.g')
+# def Gas_Enthalpy_Ref_Liquid(T, P, Cn_g, H_int_T_ref_to_Tb_l, Hvap_Tb, 
+#                             Tb, H_ref):
+#     return H_ref + H_int_T_ref_to_Tb_l + Hvap_Tb + Cn_g.T_dependent_property_integral(Tb, T)
 
 @functor(var='H.g')
 def Gas_Enthalpy_Ref_Solid(T, P, Cn_g, H_int_T_ref_to_Tm_s, Hfus,
-                           H_int_Tm_to_Tb_l, Hvap_Tb, Tb, H_ref):
-    return H_ref + H_int_T_ref_to_Tm_s + Hfus + H_int_Tm_to_Tb_l + Hvap_Tb + Cn_g.T_dependent_property_integral(Tb, T)
+                           H_int_Tm_to_Tb_l, Hvap_Tb, Tb, H_ref, P_ref=101325,V_g=None):
+    term1=H_ref + H_int_T_ref_to_Tm_s + Hfus + H_int_Tm_to_Tb_l + Hvap_Tb + Cn_g.T_dependent_property_integral(Tb, T)
+    if V_g is not None and P!=P_ref:
+        term2, _ = quad(pressure_term, P_ref,P, args=(V_g, T),epsrel=epsrel) #m^3/mol * dP giving J/mol or kJ/kmol
+        return term1+term2
+    else:
+        return term1
+
+# @functor(var='H.g')
+# def Gas_Enthalpy_Ref_Solid(T, P, Cn_g, H_int_T_ref_to_Tm_s, Hfus,
+#                            H_int_Tm_to_Tb_l, Hvap_Tb, Tb, H_ref):
+#     return H_ref + H_int_T_ref_to_Tm_s + Hfus + H_int_Tm_to_Tb_l + Hvap_Tb + Cn_g.T_dependent_property_integral(Tb, T)
 
 
 EnthalpyRefLiquid = PhaseTPFunctorBuilder('H',
@@ -137,20 +231,43 @@ def Solid_Entropy_Ref_Liquid(T, P, Cn_s, S_int_Tm_to_T_ref_l, Sfus, Tm, S0):
 def Solid_Entropy_Ref_Gas(T, P, Cn_s, S_int_Tb_to_T_ref_g, Svap_Tb, 
                           S_int_Tm_to_Tb_l, Sfus, Tm, S0):
     return S0 - S_int_Tb_to_T_ref_g - Svap_Tb - S_int_Tm_to_Tb_l - Sfus + Cn_s.T_dependent_property_integral_over_T(Tm, T)
-    
+
 @functor(var='S.g')
-def Gas_Entropy_Ref_Gas(T, P, Cn_g, T_ref, P_ref, S0):
-    return S0 + Cn_g.T_dependent_property_integral_over_T(T_ref, T) - R*log(P/P_ref)
+def Gas_Entropy_Ref_Gas(T, P, Cn_g, T_ref, P_ref, S0,V_g=None,ideal=True):
+    term1=S0 + Cn_g.T_dependent_property_integral_over_T(T_ref, T)
+    if ideal:
+        term2=R*log(P/P_ref)
+    else:
+        term2, _= quad(pressure_term_entropy, P_ref,P, args=(V_g, T),epsrel=epsrel)
+    return term1-term2
+   
+# @functor(var='S.g')
+# def Gas_Entropy_Ref_Gas(T, P, Cn_g, T_ref, P_ref, S0):
+#     return S0 + Cn_g.T_dependent_property_integral_over_T(T_ref, T) - R*log(P/P_ref)
 
 @functor(var='S.g')
 def Gas_Entropy_Ref_Liquid(T, P, Cn_g, S_int_T_ref_to_Tb_l, Svap_Tb,
-                           Tb, P_ref, S0):
-    return S0 + S_int_T_ref_to_Tb_l + Svap_Tb + Cn_g.T_dependent_property_integral_over_T(Tb, T) - R*log(P/P_ref)
+                           Tb, P_ref, S0, V_g=None,ideal=True):
+    term1=S0 + S_int_T_ref_to_Tb_l + Svap_Tb + Cn_g.T_dependent_property_integral_over_T(Tb, T)
+    if ideal:
+        term2=R*log(P/P_ref)
+    else:
+        term2, _= quad(pressure_term_entropy, P_ref,P, args=(V_g, T),epsrel=epsrel)
+    return term1-term2
+# @functor(var='S.g')
+# def Gas_Entropy_Ref_Liquid(T, P, Cn_g, S_int_T_ref_to_Tb_l, Svap_Tb,
+#                            Tb, P_ref, S0):
+#     return S0 + S_int_T_ref_to_Tb_l + Svap_Tb + Cn_g.T_dependent_property_integral_over_T(Tb, T) - R*log(P/P_ref)
 
 @functor(var='S.g')
 def Gas_Entropy_Ref_Solid(T, P, Cn_g, S_int_T_ref_to_Tm_s, Sfus,
-                          S_int_Tm_to_Tb_l, Svap_Tb, Tb, P_ref, S0):
-    return S0 + S_int_T_ref_to_Tm_s + Sfus + S_int_Tm_to_Tb_l + Svap_Tb + Cn_g.T_dependent_property_integral_over_T(Tb, T) - R*log(P/P_ref)
+                          S_int_Tm_to_Tb_l, Svap_Tb, Tb, P_ref, S0, V_g=None,ideal=True):
+    term1=S0 + S_int_T_ref_to_Tm_s + Sfus + S_int_Tm_to_Tb_l + Svap_Tb + Cn_g.T_dependent_property_integral_over_T(Tb, T)
+    if ideal:
+        term2=R*log(P/P_ref)
+    else:
+        term2, _= quad(pressure_term_entropy, P_ref,P, args=(V_g, T),epsrel=epsrel)
+    return term1-term2
 
 
 EntropyRefLiquid = PhaseTPFunctorBuilder('S',
